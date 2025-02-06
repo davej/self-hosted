@@ -1,0 +1,18 @@
+{
+  "name": "desktop-download-cdn",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "build": "tsc",
+    "deploy": "npx wrangler deploy",
+    "dev": "npx wrangler dev"
+  },
+  "author": "",
+  "license": "MIT",
+  "description": "",
+  "dependencies": {
+    "@worker-tools/router": "^0.3.0-pre.6",
+    "desktop-cdn": "^1.0.0",
+    "express-useragent": "^1.0.15"
+  }
+}

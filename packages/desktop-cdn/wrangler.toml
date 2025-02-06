@@ -1,0 +1,12 @@
+# common
+main = "src/index.ts"
+compatibility_date = "2025-02-06"
+name = "desktop-cdn"
+
+
+[[r2_buckets]]
+binding = "R2_BUCKET"
+bucket_name = "desktop-app-distributables"
+preview_bucket_name = "desktop-app-distributables"
+
+# TODO: add dev env

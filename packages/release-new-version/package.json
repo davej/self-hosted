@@ -1,0 +1,27 @@
+{
+  "name": "release-new-version",
+  "version": "1.0.0",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "release-desktop": "tsx --env-file=.env src/index.ts"
+  },
+  "author": "",
+  "license": "MIT",
+  "description": "",
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.741.0",
+    "chalk": "^5.4.1",
+    "inquirer": "^12.4.1",
+    "ora": "^8.2.0",
+    "yargs": "^17.7.2"
+  },
+  "devDependencies": {
+    "@types/chalk": "^0.4.31",
+    "@types/node": "^22.13.1",
+    "@types/ora": "^3.1.0",
+    "@types/yargs": "^17.0.33",
+    "tsx": "^4.19.2"
+  }
+}

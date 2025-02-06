@@ -1,0 +1,16 @@
+{
+  "name": "desktop-cdn",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "build": "tsc",
+    "deploy": "npx wrangler deploy",
+    "dev": "npx wrangler dev"
+  },
+  "author": "",
+  "license": "MIT",
+  "description": "",
+  "dependencies": {
+    "range-parser": "^1.2.1"
+  }
+}
