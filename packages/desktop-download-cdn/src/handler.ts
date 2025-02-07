@@ -27,9 +27,15 @@ export const handler: TypedMiddlware<typeof middleware> = async (
       userAgent,
       env,
     });
-    const objectName = new URL(downloadMetadata.url).pathname.slice(1);
 
-    return await fetchFromPath(objectName, req, env, ctx, true, buildId);
+    return await fetchFromPath(
+      downloadMetadata.path,
+      req,
+      env,
+      ctx,
+      true,
+      buildId
+    );
   } catch (err) {
     if (err instanceof HTTPError && [400, 404].includes(err.responseCode)) {
       return objectNotFound(
