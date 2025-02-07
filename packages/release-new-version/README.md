@@ -35,28 +35,28 @@ If none of `--mac`, `--linux`, or `--windows` are specified, all platform assets
 
 ## Examples
 
-Download all assets for a specific build:
+Download all assets for a specific build and optionally upload it to your R2 bucket as a release:
 
 ```bash
-pnpm release-desktop --buildId 24092644c4nvko7
+npm run release-desktop -- --buildId 24092644c4nvko7
 ```
 
 Download only Windows assets:
 
 ```bash
-pnpm release-desktop --buildId 24092644c4nvko7 --windows
+npm run release-desktop -- --buildId 24092644c4nvko7 --windows
 ```
 
 Download Mac and Linux assets:
 
 ```bash
-pnpm release-desktop --buildId 24092644c4nvko7 --mac --linux
+npm run release-desktop -- --buildId 24092644c4nvko7 --mac --linux
 ```
 
 Use previously downloaded files and upload to the simulated local R2 (useful for local testing using Wrangler):
 
 ```bash
-pnpm release-desktop --buildId 24092644c4nvko7 --usePreviousDownload --uploadToLocalR2
+npm run release-desktop -- --buildId 24092644c4nvko7 --usePreviousDownload --uploadToLocalR2
 ```
 
 ## Directory Structure
