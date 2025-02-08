@@ -154,16 +154,24 @@ async function downloadFile(
   replaceString?: string
 ): Promise<void> {
   try {
-    const response = await axios.get(url, { responseType: "text" });
+    const isManifest = url.endsWith(".json") || url.endsWith(".yml");
 
-    if (searchString && replaceString) {
+    const response = await axios.get(url, {
+      responseType: isManifest ? "text" : "arraybuffer",
+    });
+
+    if (isManifest && searchString && replaceString) {
       response.data = response.data.replace(
         new RegExp(searchString, "g"),
         replaceString
       );
     }
 
-    await fs.promises.writeFile(dest, response.data, "utf8");
+    await fs.promises.writeFile(
+      dest,
+      response.data,
+      isManifest ? "utf8" : undefined
+    );
   } catch (error) {
     spinner.fail(chalk.red(`Failed to download ${url}: ${error}`));
     throw error;
