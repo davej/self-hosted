@@ -48,9 +48,9 @@ export default ({
 
   const result = artifactNames.find(
     (artifactName) =>
-      customManifest.artifacts[artifactName] &&
-      (customManifest.artifacts[artifactName].universal ||
-        customManifest.artifacts[artifactName].x64)
+      customManifest.artifacts[artifactName]?.universal ||
+      customManifest.artifacts[artifactName]?.x64 ||
+      customManifest.artifacts[artifactName]?.arm64
   );
   if (result) {
     return result;

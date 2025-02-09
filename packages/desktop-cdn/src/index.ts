@@ -33,7 +33,7 @@ export async function fetchFromPath(
   buildId?: string
 ) {
   // Transform the path if it matches the latest-build pattern
-  path = transformLatestBuildPath(path);
+  path = encodeURIComponent(transformLatestBuildPath(path));
 
   const obj = await env.R2_BUCKET.head(path);
   if (obj === null) {

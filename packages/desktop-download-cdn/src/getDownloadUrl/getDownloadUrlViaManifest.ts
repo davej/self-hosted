@@ -140,6 +140,7 @@ export default async ({
   let isMacInstallerSupported = true;
 
   let archBackup: Arch;
+  let archBackup2: Arch;
   if (!arch) {
     if (platform === "mac") {
       const macArch = getMacArch(userAgent);
@@ -152,6 +153,7 @@ export default async ({
     // TODO: Keep an eye on metrics. It may be worth considering a switch to arm64 at some point soon.
     // Arm64 would need to be significantly more popular to change this because this is a breaking change.
     archBackup = "x64";
+    archBackup2 = "arm64";
   }
 
   if (platform === "mac" && (buildId || appVersion)) {
@@ -189,6 +191,9 @@ export default async ({
     artifactDetails = customManifest.artifacts[artifactName][arch];
     if (!artifactDetails && archBackup) {
       artifactDetails = customManifest.artifacts[artifactName][archBackup];
+    }
+    if (!artifactDetails && archBackup2) {
+      artifactDetails = customManifest.artifacts[artifactName][archBackup2];
     }
   }
 
