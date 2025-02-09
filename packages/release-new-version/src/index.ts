@@ -137,12 +137,21 @@ function createDownloadDir(appId: string, buildId: string): string {
   return downloadPath;
 }
 
-function buildUrls(appId: string, buildId: string): string[] {
+type Platform = "windows" | "linux" | "mac";
+type BuildUrl = {
+  platform: Platform;
+  url: string;
+};
+
+function buildUrls(appId: string, buildId: string): BuildUrl[] {
   const baseUrl = `https://download.todesktop.com/${appId}`;
   return [
-    `${baseUrl}/td-latest-build-${buildId}.json`,
-    `${baseUrl}/td-latest-linux-build-${buildId}.json`,
-    `${baseUrl}/td-latest-mac-build-${buildId}.json`,
+    { platform: "windows", url: `${baseUrl}/td-latest-build-${buildId}.json` },
+    {
+      platform: "linux",
+      url: `${baseUrl}/td-latest-linux-build-${buildId}.json`,
+    },
+    { platform: "mac", url: `${baseUrl}/td-latest-mac-build-${buildId}.json` },
   ];
 }
 
@@ -160,11 +169,19 @@ async function downloadFile(
       responseType: isManifest ? "text" : "arraybuffer",
     });
 
-    if (isManifest && searchString && replaceString) {
-      response.data = response.data.replace(
-        new RegExp(searchString, "g"),
-        replaceString
-      );
+    if (isManifest) {
+      if (searchString && replaceString) {
+        response.data = response.data.replace(
+          new RegExp(searchString, "g"),
+          replaceString
+        );
+      }
+    } else if (!url.endsWith(".blockmap") && !url.includes("Mac%20Installer")) {
+      // try to download the blockmaps (except for the universal Mac installer)
+      const blockmapUrl = url + ".blockmap";
+      await downloadFile(blockmapUrl, dest + ".blockmap", spinner).catch(() => {
+        console.log(chalk.yellow(`No blockmap found for ${url}`));
+      });
     }
 
     await fs.promises.writeFile(
@@ -178,10 +195,20 @@ async function downloadFile(
   }
 }
 
-async function fetchJSON(url: string, spinner: Ora): Promise<BuildJSON> {
+type FormattedBuildJson = {
+  platform: Platform;
+  buildJson: BuildJSON;
+};
+async function fetchJSON(
+  url: BuildUrl,
+  spinner: Ora
+): Promise<FormattedBuildJson> {
   try {
-    const response = await axios.get<BuildJSON>(url);
-    return response.data;
+    const response = await axios.get<BuildJSON>(url.url);
+    return {
+      platform: url.platform,
+      buildJson: response.data,
+    };
   } catch (error) {
     spinner.fail(chalk.red(`Failed to fetch JSON from ${url}: ${error}`));
     throw error;
@@ -191,19 +218,24 @@ async function fetchJSON(url: string, spinner: Ora): Promise<BuildJSON> {
 interface Asset {
   url: string;
   category: string;
+  platform: Platform;
 }
 
-function extractDownloadUrls(buildJson: BuildJSON): Asset[] {
+function extractDownloadUrls(buildJson: FormattedBuildJson): Asset[] {
   const assets: Asset[] = [];
 
-  const artifacts = buildJson.artifacts;
+  const artifacts = buildJson.buildJson.artifacts;
   for (const category in artifacts) {
     const artifactCategory = artifacts[category as keyof Artifacts];
     if (artifactCategory) {
       for (const subKey in artifactCategory) {
         const artifactDetail = artifactCategory[subKey];
         if (artifactDetail && artifactDetail.url) {
-          assets.push({ url: artifactDetail.url, category });
+          assets.push({
+            url: artifactDetail.url,
+            category,
+            platform: buildJson.platform,
+          });
         }
       }
     }
@@ -212,12 +244,12 @@ function extractDownloadUrls(buildJson: BuildJSON): Asset[] {
   return assets;
 }
 
-function buildYmlUrls(appId: string, buildId: string): string[] {
+function buildYmlUrls(appId: string, buildId: string): BuildUrl[] {
   const baseUrl = `https://download.todesktop.com/${appId}`;
   return [
-    `${baseUrl}/latest-build-${buildId}.yml`,
-    `${baseUrl}/latest-linux-build-${buildId}.yml`,
-    `${baseUrl}/latest-mac-build-${buildId}.yml`,
+    { platform: "windows", url: `${baseUrl}/latest-build-${buildId}.yml` },
+    { platform: "linux", url: `${baseUrl}/latest-linux-build-${buildId}.yml` },
+    { platform: "mac", url: `${baseUrl}/latest-mac-build-${buildId}.yml` },
   ];
 }
 
@@ -292,22 +324,21 @@ async function download(args: Args, spinner: Ora) {
   let filteredJsonUrls = jsonUrls;
   if (args.mac || args.linux || args.windows) {
     filteredJsonUrls = jsonUrls.filter((url) => {
-      if (args.mac && url.includes("mac")) return true;
-      if (args.linux && url.includes("linux")) return true;
-      if (args.windows && !url.includes("mac") && !url.includes("linux"))
-        return true;
+      if (args.mac && url.platform === "mac") return true;
+      if (args.linux && url.platform === "linux") return true;
+      if (args.windows && url.platform === "windows") return true;
       return false;
     });
   }
 
   // Download JSON files
   for (const url of filteredJsonUrls) {
-    const fileName = path.basename(url);
+    const fileName = path.basename(url.url);
     const dest = path.join(downloadDir, fileName);
 
     spinner.start(`Downloading JSON file: ${fileName}`);
     await downloadFile(
-      url,
+      url.url,
       dest,
       spinner,
       `https://download.todesktop.com/${process.env.APP_ID}`,
@@ -318,7 +349,7 @@ async function download(args: Args, spinner: Ora) {
 
   // Process each JSON file
   for (const url of filteredJsonUrls) {
-    const fileName = path.basename(url);
+    const fileName = path.basename(url.url);
 
     spinner.start(`Parsing JSON file: ${fileName}`);
     const buildJson = await fetchJSON(url, spinner);
@@ -331,10 +362,9 @@ async function download(args: Args, spinner: Ora) {
     let filteredAssets = assets;
     if (args.mac || args.linux || args.windows) {
       filteredAssets = assets.filter((asset) => {
-        const assetUrlLower = asset.url.toLowerCase();
-        if (args.mac && assetUrlLower.includes("mac")) return true;
-        if (args.linux && assetUrlLower.includes("linux")) return true;
-        if (args.windows && assetUrlLower.endsWith(".exe")) return true;
+        if (args.mac && asset.platform === "mac") return true;
+        if (args.linux && asset.platform === "linux") return true;
+        if (args.windows && asset.platform === "windows") return true;
         return false;
       });
     }
@@ -356,23 +386,22 @@ async function download(args: Args, spinner: Ora) {
   let filteredYmlUrls = ymlUrls;
   if (args.mac || args.linux || args.windows) {
     filteredYmlUrls = ymlUrls.filter((url) => {
-      if (args.mac && url.includes("mac")) return true;
-      if (args.linux && url.includes("linux")) return true;
-      if (args.windows && !url.includes("mac") && !url.includes("linux"))
-        return true;
+      if (args.mac && url.platform === "mac") return true;
+      if (args.linux && url.platform === "linux") return true;
+      if (args.windows && url.platform === "windows") return true;
       return false;
     });
   }
 
   for (const url of filteredYmlUrls) {
-    const fileName = path.basename(url);
+    const fileName = path.basename(url.url);
     // `latest[-linux|-mac].yml`
     const latestFileName = fileName.replace(`-build-${args.buildId}`, "");
     const dest = path.join(downloadDir, fileName);
     const destToCopy = path.join(downloadDir, latestFileName);
 
     spinner.start(`Downloading YML file: ${fileName}`);
-    await downloadFile(url, dest, spinner);
+    await downloadFile(url.url, dest, spinner);
     // extract version number from first line of yaml
     spinner.succeed(chalk.green(`Downloaded ${fileName}`));
     fs.copyFileSync(dest, destToCopy);
@@ -386,7 +415,7 @@ async function download(args: Args, spinner: Ora) {
   }
 
   for (const url of filteredJsonUrls) {
-    const fileName = path.basename(url);
+    const fileName = path.basename(url.url);
     // `td-latest[-linux|-mac].json`
     const latestFileName = fileName.replace(`-build-${args.buildId}`, "");
     const existingFile = path.join(downloadDir, fileName);
