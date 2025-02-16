@@ -11,6 +11,7 @@
   "license": "MIT",
   "description": "",
   "dependencies": {
+    "@todesktop/release-relay": "^1.0.0",
     "range-parser": "^1.2.1"
   }
 }
