@@ -1,5 +1,5 @@
 {
-  "name": "release-new-version",
+  "name": "@todesktop/release-new-version",
   "version": "1.0.0",
   "main": "index.js",
   "type": "module",

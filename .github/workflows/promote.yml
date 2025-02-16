@@ -1,0 +1,183 @@
+name: Promote Release from Staging to Production
+
+on:
+  push:
+    branches:
+      - main
+      # Triggered by merging PR from `release-relay` into main.
+
+jobs:
+  promote:
+    runs-on: ubuntu-latest
+
+    steps:
+      ############################################################
+      # (1) Check out the repo to get local desktop-builds.json
+      ############################################################
+      - name: Check out repo
+        uses: actions/checkout@v3
+
+      ############################################################
+      # (2) Convert Cloudflare API token -> S3 credentials
+      ############################################################
+      - name: Derive S3 credentials from Cloudflare API token
+        id: derive_s3_creds
+        run: |
+          set -e
+          echo "Fetching CF token ID from /user/tokens/verify..."
+          CF_TOKEN_ID=$(curl -s \
+            https://api.cloudflare.com/client/v4/user/tokens/verify \
+            -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+            | jq -r '.result.id'
+          )
+
+          if [ -z "$CF_TOKEN_ID" ] || [ "$CF_TOKEN_ID" == "null" ]; then
+            echo "Failed to retrieve token ID. Check your token permissions."
+            exit 1
+          fi
+
+          CF_TOKEN_HASH=$(echo -n "$CLOUDFLARE_API_TOKEN" | shasum -a 256 | awk '{print $1}')
+
+          echo "AWS_ACCESS_KEY_ID=$CF_TOKEN_ID" >> $GITHUB_ENV
+          echo "AWS_SECRET_ACCESS_KEY=$CF_TOKEN_HASH" >> $GITHUB_ENV
+          echo "AWS_ENDPOINT_URL=https://${CLOUDFLARE_ACCOUNT_ID}.r2.cloudflarestorage.com" >> $GITHUB_ENV
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
+      ############################################################
+      # (3) Install & configure rclone
+      ############################################################
+      - name: Install rclone
+        run: |
+          curl https://rclone.org/install.sh | sudo bash
+
+      - name: Configure rclone
+        run: |
+          mkdir -p ~/.config/rclone
+          cat > ~/.config/rclone/rclone.conf << EOF
+          [r2]
+          type = s3
+          provider = Cloudflare
+          access_key_id = ${AWS_ACCESS_KEY_ID}
+          secret_access_key = ${AWS_SECRET_ACCESS_KEY}
+          endpoint = ${AWS_ENDPOINT_URL}
+          EOF
+
+      ############################################################
+      # (4) Download the remote desktop-builds.json from production (if any).
+      #     We'll store it locally as remote_builds.json.
+      #     If it doesn't exist, we create an empty file.
+      ############################################################
+      - name: Fetch remote desktop-builds.json
+        id: fetch_remote
+        run: |
+          set +e
+          rclone copy r2:desktop-app-distributables/desktop-builds.json . --ignore-existing
+          RC=$?
+          if [ $RC -ne 0 ]; then
+            echo "No remote desktop-builds.json found in production."
+            touch remote_builds.json
+          else
+            mv desktop-builds.json remote_builds.json
+            echo "Fetched remote desktop-builds.json -> remote_builds.json"
+          fi
+          exit 0
+
+      ############################################################
+      # (5) Parse remote_builds.json & local desktop-builds.json,
+      #     find newly added builds (by their `id`)
+      #
+      # We'll store them in a comma-separated string "NEW_BUILD_IDS"
+      # which we set as an output for the next step.
+      ############################################################
+      - name: Find newly added builds
+        id: find_new_builds
+        run: |
+          # If local desktop-builds.json is missing or empty, skip
+          if [ ! -f desktop-builds.json ]; then
+            echo "::set-output name=new_builds::"
+            echo "::set-output name=diff_result::nochange"
+            exit 0
+          fi
+
+          # Convert remote into an array "remoteBuilds"
+          # Convert local into an array "localBuilds"
+          # We assume it's an array of objects with an `id` property.
+          # Example schema: [ { "id": "123", ... }, { "id": "456", ... } ]
+          # We'll collect the IDs from each array and compare.
+          REMOTE_JSON=$(cat remote_builds.json)
+          LOCAL_JSON=$(cat desktop-builds.json)
+
+          # If the remote file is empty, parse it as []
+          if [ -z "$REMOTE_JSON" ]; then
+            REMOTE_JSON="[]"
+          fi
+
+          # Convert each array to a set of IDs with jq
+          REMOTE_IDS=$(echo "$REMOTE_JSON" | jq -r 'map(.id) | join(" ")')
+          LOCAL_IDS=$(echo "$LOCAL_JSON" | jq -r 'map(.id) | join(" ")')
+
+          # Build a newBuilds array: all local IDs minus remote IDs
+          # We'll store them in a shell array, then join them with commas
+          newIDs=()
+          for id in $LOCAL_IDS; do
+            # If not in REMOTE_IDS, it's new
+            if [[ " $REMOTE_IDS " != *" $id "* ]]; then
+              newIDs+=("$id")
+            fi
+          done
+
+          if [ ${#newIDs[@]} -eq 0 ]; then
+            echo "No new builds found."
+            echo "::set-output name=new_builds::"
+            echo "::set-output name=diff_result::nochange"
+          else
+            NEW_BUILDS_CSV=$(IFS=, ; echo "${newIDs[*]}")
+            echo "New builds found: $NEW_BUILDS_CSV"
+            echo "::set-output name=new_builds::$NEW_BUILDS_CSV"
+            echo "::set-output name=diff_result::changed"
+          fi
+
+      ############################################################
+      # (6) Copy each newly added build from staging/<id>/ → production/
+      #     Only runs if we have new builds (diff_result == changed)
+      ############################################################
+      - name: Promote each new build
+        if: steps.find_new_builds.outputs.diff_result == 'changed'
+        run: |
+          IFS=',' read -ra build_ids <<< "${{ steps.find_new_builds.outputs.new_builds }}"
+          for build_id in "${build_ids[@]}"; do
+            echo "Promoting build_id=$build_id from staging -> production"
+            rclone copy r2:desktop-app-distributables-staging/${build_id}/ r2:desktop-app-distributables/
+          done
+
+      ############################################################
+      # (7) Upload updated desktop-builds.json and desktop-releases.json
+      #     to production (only if changed)
+      ############################################################
+      - name: Copy desktop-builds.json & desktop-releases.json
+        if: steps.find_new_builds.outputs.diff_result == 'changed'
+        run: |
+          if [ -f desktop-builds.json ]; then
+            rclone copy desktop-builds.json r2:desktop-app-distributables/
+          fi
+          if [ -f desktop-releases.json ]; then
+            rclone copy desktop-releases.json r2:desktop-app-distributables/
+          fi
+
+      ############################################################
+      # (8) Purge Cloudflare cache if changed
+      # TODO: Enabled this once caching support is enabled
+      ############################################################
+      # - name: Purge Cloudflare cache
+      #   if: steps.find_new_builds.outputs.diff_result == 'changed'
+      #   run: |
+      #     echo "Purging entire CF cache for zone $CLOUDFLARE_ZONE_ID"
+      #     curl -s -X POST "https://api.cloudflare.com/client/v4/zones/$CLOUDFLARE_ZONE_ID/purge_cache" \
+      #       -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+      #       -H "Content-Type: application/json" \
+      #       --data '{"purge_everything":true}'
+      #   env:
+      #     CLOUDFLARE_ZONE_ID: ${{ secrets.CLOUDFLARE_ZONE_ID }}
+      #     CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}

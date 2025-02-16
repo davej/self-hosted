@@ -7,5 +7,3 @@ name = "desktop-download-cdn"
 binding = "R2_BUCKET"
 bucket_name = "desktop-app-distributables"
 preview_bucket_name = "desktop-app-distributables"
-
-# TODO: add dev env

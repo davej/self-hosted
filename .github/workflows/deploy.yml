@@ -1,13 +1,32 @@
 name: Deploy Worker
 on:
   push:
+    branches:
+      - main
   pull_request:
   repository_dispatch:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    if: github.repository_owner != 'ToDesktop'
     steps:
       - uses: actions/checkout@v4
+      # Add R2 bucket creation steps
+      - name: Create R2 buckets if not exist
+        run: |
+          create_bucket_if_not_exists() {
+            local bucket_name=$1
+            if ! curl -X GET "https://api.cloudflare.com/client/v4/accounts/${{ secrets.CLOUDFLARE_ACCOUNT_ID }}/r2/buckets/${bucket_name}" \
+              -H "Authorization: Bearer ${{ secrets.CLOUDFLARE_API_TOKEN }}" | grep -q '"success":true'; then
+              curl -X PUT "https://api.cloudflare.com/client/v4/accounts/${{ secrets.CLOUDFLARE_ACCOUNT_ID }}/r2/buckets/${bucket_name}" \
+                -H "Authorization: Bearer ${{ secrets.CLOUDFLARE_API_TOKEN }}"
+            fi
+          }
+
+          # Create both buckets
+          create_bucket_if_not_exists "desktop-app-distributables"
+          create_bucket_if_not_exists "desktop-app-distributables-staging"
+
       - name: Deploy desktop-cdn
         uses: cloudflare/wrangler-action@v3
         with:
@@ -18,3 +37,8 @@ jobs:
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           workingDirectory: packages/desktop-download-cdn
+      - name: Deploy release-relay
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          workingDirectory: packages/release-relay

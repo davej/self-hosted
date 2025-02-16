@@ -1,5 +1,5 @@
 {
-  "name": "desktop-download-cdn",
+  "name": "@todesktop/desktop-download-cdn",
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
