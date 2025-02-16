@@ -2,13 +2,16 @@ name: Promote Release from Staging to Production
 
 on:
   push:
+    paths:
+      - desktop-builds.json
+      - desktop-releases.json
     branches:
       - main
-      # Triggered by merging PR from `release-relay` into main.
 
 jobs:
   promote:
     runs-on: ubuntu-latest
+    if: github.repository_owner == 'ToDesktop'
 
     steps:
       ############################################################
@@ -72,17 +75,24 @@ jobs:
       - name: Fetch remote desktop-builds.json
         id: fetch_remote
         run: |
-          set +e
-          rclone copy r2:desktop-app-distributables/desktop-builds.json . --ignore-existing
-          RC=$?
-          if [ $RC -ne 0 ]; then
-            echo "No remote desktop-builds.json found in production."
-            touch remote_builds.json
+          set -e  # Exit on any error
+          echo "Attempting to download remote desktop-builds.json..."
+          # Create a temporary directory for the download
+          mkdir -p tmp_download
+
+          # Download to the temporary directory
+          rclone copy r2:desktop-app-distributables/desktop-builds.json tmp_download/ --verbose
+
+          # Move the file to the desired location
+          if [ -f tmp_download/desktop-builds.json ]; then
+            mv tmp_download/desktop-builds.json ./remote_builds.json
+            rm -rf tmp_download
+            echo "Successfully downloaded remote_builds.json"
+            ls -l remote_builds.json
           else
-            mv desktop-builds.json remote_builds.json
-            echo "Fetched remote desktop-builds.json -> remote_builds.json"
+            echo "Warning: Failed to download remote_builds.json, creating empty file"
+            echo "[]" > remote_builds.json
           fi
-          exit 0
 
       ############################################################
       # (5) Parse remote_builds.json & local desktop-builds.json,
@@ -94,50 +104,73 @@ jobs:
       - name: Find newly added builds
         id: find_new_builds
         run: |
-          # If local desktop-builds.json is missing or empty, skip
+          echo "=== Starting Find newly added builds ==="
+
+          # Check for local desktop-builds.json
+          echo "Checking for local desktop-builds.json..."
           if [ ! -f desktop-builds.json ]; then
-            echo "::set-output name=new_builds::"
-            echo "::set-output name=diff_result::nochange"
+            echo "❌ Local desktop-builds.json not found or empty"
+            echo "new_builds=" >> $GITHUB_OUTPUT
+            echo "diff_result=nochange" >> $GITHUB_OUTPUT
             exit 0
           fi
+          echo "✅ Found local desktop-builds.json"
 
-          # Convert remote into an array "remoteBuilds"
-          # Convert local into an array "localBuilds"
-          # We assume it's an array of objects with an `id` property.
-          # Example schema: [ { "id": "123", ... }, { "id": "456", ... } ]
-          # We'll collect the IDs from each array and compare.
-          REMOTE_JSON=$(cat remote_builds.json)
-          LOCAL_JSON=$(cat desktop-builds.json)
-
-          # If the remote file is empty, parse it as []
-          if [ -z "$REMOTE_JSON" ]; then
+          # Handle remote builds file
+          echo "Checking remote_builds.json..."
+          if [ -f remote_builds.json ]; then
+            echo "✅ Found remote_builds.json"
+            REMOTE_JSON=$(cat remote_builds.json)
+            echo "Remote JSON content length: $(echo "$REMOTE_JSON" | wc -c) bytes"
+          else
+            echo "⚠️ No remote_builds.json found, using empty array"
             REMOTE_JSON="[]"
           fi
 
-          # Convert each array to a set of IDs with jq
-          REMOTE_IDS=$(echo "$REMOTE_JSON" | jq -r 'map(.id) | join(" ")')
-          LOCAL_IDS=$(echo "$LOCAL_JSON" | jq -r 'map(.id) | join(" ")')
+          echo "Reading local desktop-builds.json..."
+          LOCAL_JSON=$(cat desktop-builds.json)
+          echo "Local JSON content length: $(echo "$LOCAL_JSON" | wc -c) bytes"
 
-          # Build a newBuilds array: all local IDs minus remote IDs
-          # We'll store them in a shell array, then join them with commas
+          # Handle empty remote JSON
+          if [ -z "$REMOTE_JSON" ]; then
+            echo "⚠️ Remote JSON is empty, using empty array"
+            REMOTE_JSON="[]"
+          fi
+
+          echo "Extracting remote IDs..."
+          REMOTE_IDS=$(echo "$REMOTE_JSON" | jq -r 'map(.id) | join(" ")')
+          echo "Remote IDs found: $REMOTE_IDS"
+
+          echo "Extracting local IDs..."
+          LOCAL_IDS=$(echo "$LOCAL_JSON" | jq -r 'map(.id) | join(" ")')
+          echo "Local IDs found: $LOCAL_IDS"
+
+          echo "Comparing IDs to find new builds..."
           newIDs=()
           for id in $LOCAL_IDS; do
-            # If not in REMOTE_IDS, it's new
+            echo "Checking ID: $id"
             if [[ " $REMOTE_IDS " != *" $id "* ]]; then
+              echo "✅ Found new build: $id"
               newIDs+=("$id")
+            else
+              echo "ℹ️ ID already exists in remote: $id"
             fi
           done
 
+          echo "Number of new builds found: ${#newIDs[@]}"
+
           if [ ${#newIDs[@]} -eq 0 ]; then
-            echo "No new builds found."
-            echo "::set-output name=new_builds::"
-            echo "::set-output name=diff_result::nochange"
+            echo "📢 No new builds to promote"
+            echo "new_builds=" >> $GITHUB_OUTPUT
+            echo "diff_result=nochange" >> $GITHUB_OUTPUT
           else
             NEW_BUILDS_CSV=$(IFS=, ; echo "${newIDs[*]}")
-            echo "New builds found: $NEW_BUILDS_CSV"
-            echo "::set-output name=new_builds::$NEW_BUILDS_CSV"
-            echo "::set-output name=diff_result::changed"
+            echo "📢 New builds to promote: $NEW_BUILDS_CSV"
+            echo "new_builds=$NEW_BUILDS_CSV" >> $GITHUB_OUTPUT
+            echo "diff_result=changed" >> $GITHUB_OUTPUT
           fi
+
+          echo "=== Finished Find newly added builds ==="
 
       ############################################################
       # (6) Copy each newly added build from staging/<id>/ → production/

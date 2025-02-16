@@ -52,11 +52,12 @@ export async function createPullRequestForNewBuild(
 ): Promise<void> {
   // 1) Get default branch (and HEAD commit SHA)
   const { defaultBranch, commitSha } = await getDefaultBranchAndCommit(env);
+  console.log("Default branch:", defaultBranch);
 
   // 2) Create a new branch for this release (now captures the actual branch name used)
   const newBranchName = `release-build-${buildId}`;
   const actualBranchName = await createBranch(env, newBranchName, commitSha);
-
+  console.log("Actual branch name:", actualBranchName);
   // 3) Fetch, update and commit desktop-builds.json
   const buildPath = "desktop-builds.json"; // Adjust if you store it elsewhere
   const { content: buildsContent, sha: buildsSha } = await fetchOrCreateFile(
@@ -65,12 +66,16 @@ export async function createPullRequestForNewBuild(
     defaultBranch
   );
 
+  console.log("Builds content:", buildsContent);
+
   const updatedBuildContent = updateDesktopBuilds(buildsContent, {
     id: buildId,
     version,
     createdAt: new Date().toISOString(),
     isReleased: true,
   });
+
+  console.log("Updated builds content:", updatedBuildContent);
 
   const buildCommitMessage = `Add build ${buildId} (v${version}) to desktop-builds.json`;
   await commitFileChanges(
@@ -81,6 +86,8 @@ export async function createPullRequestForNewBuild(
     buildCommitMessage,
     actualBranchName
   );
+
+  console.log("Committed builds file changes.");
 
   if (releaseInfo) {
     // 4) Fetch, update and commit desktop-releases.json
@@ -95,7 +102,7 @@ export async function createPullRequestForNewBuild(
       releaseInfo
     );
 
-    console.log("Updated releases content2:", updatedReleasesContent);
+    console.log("Updated releases content:", updatedReleasesContent);
 
     const releasesCommitMessage = `Release v${version} in desktop-releases.json`;
     await commitFileChanges(

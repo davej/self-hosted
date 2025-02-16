@@ -18,6 +18,7 @@ async function newReleaseWebhook(
     const resultMessage = await processNewReleaseWebhook(rawBody, env);
     return new Response(resultMessage, { status: 200 });
   } catch (err) {
+    console.error("Error processing new release webhook:", err);
     return new Response((err as Error).message, { status: 400 });
   }
 }

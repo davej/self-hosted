@@ -1,5 +1,4 @@
 import { Env, NewReleaseWebhook } from "./types";
-import { validateWebhookSignature } from "./validateWebhookSignature";
 import { fetchBuildJSONs } from "./addDistributablesToStaging/fetchBuildJSONs";
 import { collectArtifactsFromManifests } from "./addDistributablesToStaging/collectArtifactsFromManifests";
 import { uploadArtifactsToStaging } from "./addDistributablesToStaging/uploadArtifactsToStaging";
