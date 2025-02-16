@@ -1,0 +1,18 @@
+# common
+main = "src/index.ts"
+compatibility_date = "2025-02-06"
+name = "release-relay"
+
+[[r2_buckets]]
+binding = "STAGING_R2_BUCKET"
+bucket_name = "desktop-app-distributables-staging"
+preview_bucket_name = "desktop-app-distributables-staging"
+
+[vars]
+# GITHUB_OWNER = "YOUR_GITHUB_OWNER/ORG"
+# GITHUB_REPO = "YOUR_GITHUB_REPO_NAME"
+
+# You will also need to add GITHUB_TOKEN and WEBHOOK_HMAC_KEY as secrets
+
+[observability]
+enabled = true

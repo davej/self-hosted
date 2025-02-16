@@ -1,6 +1,7 @@
 import { serveFromR2 } from "./serveFromR2";
 import type { Env } from "./types";
 import { transformLatestBuildPath } from "./utils/transformLatestBuildPath";
+import applyRedirections from "./redirections/applyRedirections";
 
 const fetch: ExportedHandlerFetchHandler<Env> = async (request, env, ctx) => {
   const url = new URL(request.url);
@@ -32,6 +33,16 @@ export async function fetchFromPath(
   isDownload?: boolean,
   buildId?: string
 ) {
+  const appliedRedirections = await applyRedirections({
+    env,
+    originalPath: path,
+    ip: request.headers.get("cf-connecting-ip"),
+  });
+
+  if ("path" in appliedRedirections) {
+    path = appliedRedirections.path;
+  }
+
   // Transform the path if it matches the latest-build pattern
   path = transformLatestBuildPath(path);
 

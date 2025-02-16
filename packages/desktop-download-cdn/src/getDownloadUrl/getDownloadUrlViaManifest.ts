@@ -6,6 +6,8 @@ import getMacArch from "./getMacArch";
 import getPlatform from "./getPlatform";
 import { isSupportedPlatform } from "./isSupportedPlatform";
 import { Arch, Env, HTTPError, supportedArchs } from "../types";
+import applyRedirections from "desktop-cdn/src/redirections/applyRedirections";
+import { transformLatestBuildPath } from "desktop-cdn/src/utils/transformLatestBuildPath";
 
 export function resolveUrl(from, to) {
   const resolvedUrl = new URL(to, new URL(from, "resolve://").href);
@@ -95,13 +97,26 @@ export async function fetchManifest({
   platform: string;
   env: Env;
 }): Promise<CustomManifest> {
-  const manifestFilename = getManifestFilename({
+  let manifestFilename = getManifestFilename({
     appVersion,
     buildId,
     channel,
     isCustomManifest: true,
     platform,
   });
+
+  const appliedRedirections = await applyRedirections({
+    env,
+    originalPath: manifestFilename,
+  });
+
+  if ("path" in appliedRedirections) {
+    manifestFilename = appliedRedirections.path;
+  }
+
+  // Transform the path if it matches the latest-build pattern
+  manifestFilename = transformLatestBuildPath(manifestFilename);
+
   const manifest = await env.R2_BUCKET.get(manifestFilename);
 
   if (manifest) {

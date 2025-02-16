@@ -1,16 +1,15 @@
 {
-  "name": "@todesktop/desktop-cdn",
+  "name": "@todesktop/release-relay",
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
     "build": "tsc",
     "deploy": "npx wrangler deploy",
-    "dev": "npx wrangler dev"
+    "dev": "npx wrangler dev",
+    "test-release-webhook": "npx tsx --env-file=.dev.vars src/test/testRelease.ts"
   },
   "author": "",
   "license": "MIT",
   "description": "",
-  "dependencies": {
-    "range-parser": "^1.2.1"
-  }
+  "dependencies": {}
 }

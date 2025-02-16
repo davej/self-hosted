@@ -6,3 +6,6 @@ export interface Env {
 export type ParsedRange =
   | { offset: number; length: number }
   | { suffix: number };
+
+export const supportedPlatforms = ["linux", "mac", "windows"] as const;
+export type PlatformName = (typeof supportedPlatforms)[number];

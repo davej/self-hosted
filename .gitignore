@@ -3,3 +3,4 @@ node_modules
 test-distributables
 .env
 distributables-for-release
+.dev.vars

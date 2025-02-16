@@ -1,0 +1,26 @@
+{
+  "appId": "240808w4a9kky77",
+  "buildId": "250210vv2q75v93",
+  "userId": "1FhA6LSzGPaEJdapNnsvCMSYL3X2",
+  "buildStartedAt": "2025-02-10T13:00:25Z",
+  "buildEndedAt": "2025-02-10T13:15:06Z",
+  "appName": "ToDesktop Builder Staging",
+  "appVersion": "4.27.0",
+  "appNotarizaionBundleId": "com.todesktop.240808w4a9kky77",
+  "electronVersionUsed": "33.3.2",
+  "electronVersionSpecified": "33.3.2",
+  "sourcePackageManager": "npm",
+  "versionControlInfo": {
+    "repositoryRemoteUrl": "https://github.com/ToDesktop/todesktop-builder.git",
+    "commitMessage": "chore: bump version to 6.8.0",
+    "branchName": "master",
+    "hasUncommittedChanges": true,
+    "commitId": "dfd155b0d39d38a8945d3d89c3885a920d3f363e",
+    "versionControlSystemName": "git",
+    "commitDate": "2025-02-05T16:47:05.000Z"
+  },
+  "releaseInfo": {
+    "latestReleaseBuildId": "250210vv2q75v93",
+    "releaseRedirections": []
+  }
+}
