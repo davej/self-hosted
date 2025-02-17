@@ -28,6 +28,7 @@
    - `GITHUB_TOKEN` (SECRET) - a github token with the required scopes from step 4
    - `GITHUB_OWNER` (VAR) - the owner of the forked `self-hosted` repo
    - `GITHUB_REPO` (VAR) - the name of the forked `self-hosted` repo
+7. (Optional) Create custom domains for your self-hosted workers.
 
 That's it!
 
@@ -38,8 +39,10 @@ That's it!
 3. Run `todesktop build` to build your app.
 4. "Partially release" your app on ToDesktop to your local IP address (or multiple IPs if you wish to test the migration with multiple users).
 5. Merge the PR created by the `release-relay` worker.
-6. Test that everything works as expected.
-7. If all looks good, the do a "Release" of your app on ToDesktop and merge the PR created by the `release-relay` worker.
+6. When you open the app then it should update to the new version. From now on, the app will check for updates on your self-hosted workers.
+7. Repeat steps 3-6 again to test a full update on your self-hosted workers.
+8. If all looks good, then do a full "Release" of your app on ToDesktop and merge the PR created by the `release-relay` worker.
+9. You may also update your download URLs to point to your `desktop-download-cdn` worker.
 
 ## How it works from now on
 
