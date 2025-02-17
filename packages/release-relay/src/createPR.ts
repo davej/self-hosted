@@ -4,6 +4,7 @@ import {
   Env,
   NewReleaseWebhook,
 } from "./types";
+import githubUrlFromGit from "github-url-from-git";
 
 interface DesktopBuildsJSON extends Array<BuildEntry> {}
 
@@ -122,11 +123,11 @@ export async function createPullRequestForNewBuild(
 
   // 5) Open a pull request
   const bucket = env.STAGING_R2_BUCKET;
+
+  console.log("Bucket prefix:", webhookData.buildId);
   const files = await bucket.list({
-    prefix: `${webhookData.appId}`,
-    delimiter: "/",
+    prefix: webhookData.buildId,
   });
-  console.log("Files:", files);
   const fileList = files.objects.map((file) => ({
     name: file.key,
     size: file.size,
@@ -135,7 +136,7 @@ export async function createPullRequestForNewBuild(
       : undefined,
     uploaded: file.uploaded,
   }));
-  console.log("File list:", fileList);
+  console.log("Files in staging bucket:", fileList);
 
   const {
     electronVersionUsed,
@@ -149,33 +150,19 @@ export async function createPullRequestForNewBuild(
 |----------|---------|
 | App version | ${appVersion} |
 | Electron version | ${electronVersionUsed} |
-| Commit hash | [${versionControlInfo.commitId}](${
-    versionControlInfo.repositoryRemoteUrl
-  }/commit/${versionControlInfo.commitId}) |
-| Build Started At | ${new Date(buildStartedAt).toLocaleString()} |
-| Build Ended At | ${new Date(buildEndedAt).toLocaleString()} |
+| Commit hash | ${gitCommitAsLinkIfPossible(versionControlInfo)} |
+| Build Started At | ${new Date(buildStartedAt).toUTCString()} |
+| Build Ended At | ${new Date(buildEndedAt).toUTCString()} |
 
-### Files
-
-You can find the files in the bucket: \`${fileList[0].name.split("/")[0]}\`
-Under the path: \`${webhookData.appId}/\`
-
-| File | Size | MD5 | Uploaded |
-|------|------|-----|----------|
-${fileList
-  .map(
-    (file) =>
-      `| ${file.name.split("/").pop()} | ${file.size / 1024 / 1024}MB | ${
-        file.md5
-      } | ${file.uploaded.toLocaleString()} |`
-  )
-  .join("\n")}
+${generateFilesMarkdown(webhookData.buildId, fileList)}
   
-This PR adds a new build (ID = ${buildId}, version = ${appVersion}) to desktop-builds.json${
+This PR adds a new build (ID = \`${buildId}\`, version = \`${appVersion}\`) to desktop-builds.json${
     releaseInfo ? ` and releases it in desktop-releases.json` : ""
   }.
   
-Please review the changes. Once approved and merged, the staging bucket files will be promoted to production.`;
+Please review the changes. Once approved and merged, the staging bucket files with the \`${
+    webhookData.buildId
+  }\` prefix will be promoted to production.`;
   await createPullRequest(
     env,
     prTitle,
@@ -436,4 +423,53 @@ async function createPullRequest(
   });
 
   console.log(`Pull request #${prInfo.number} created: ${prInfo.html_url}`);
+}
+
+function gitCommitAsLinkIfPossible(
+  versionControlInfo: NewReleaseWebhook["versionControlInfo"]
+): string {
+  if (
+    versionControlInfo.commitId &&
+    versionControlInfo.repositoryRemoteUrl.includes("github.com")
+  ) {
+    return `[${versionControlInfo.commitId.substring(0, 8)}](${githubUrlFromGit(
+      versionControlInfo.repositoryRemoteUrl
+    )}/commit/${versionControlInfo.commitId})`;
+  }
+  return versionControlInfo.commitId.substring(0, 8);
+}
+
+/**
+ * Generates the markdown for the Files section of the PR description
+ */
+function generateFilesMarkdown(
+  buildId: string,
+  fileList: Array<{ name: string; size: number; md5?: string; uploaded: Date }>
+): string {
+  if (!fileList || fileList?.length === 0) {
+    return "";
+  }
+
+  const formatFileSize = (bytes: number): string => {
+    if (bytes < 1024 * 1024) {
+      // Less than 1MB
+      return `${bytes.toLocaleString()} bytes`;
+    }
+    return `${(bytes / 1024 / 1024).toFixed(1)}MB`;
+  };
+
+  return `### Files
+
+You can find the files in the staging bucket under the prefix: \`${buildId}/\`
+
+| File | Size | MD5 | Uploaded |
+|------|------|-----|----------|
+${fileList
+  .map(
+    (file) =>
+      `| ${file.name.split("/").pop()} | ${formatFileSize(file.size)} | ${
+        file.md5
+      } | ${file.uploaded.toUTCString()} |`
+  )
+  .join("\n")}`;
 }

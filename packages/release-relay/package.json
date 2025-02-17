@@ -11,5 +11,7 @@
   "author": "",
   "license": "MIT",
   "description": "",
-  "dependencies": {}
+  "dependencies": {
+    "github-url-from-git": "^1.5.0"
+  }
 }
