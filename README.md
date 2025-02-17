@@ -12,10 +12,10 @@
    - `desktop-download-cdn` worker
    - `desktop-app-distributables-staging` R2 bucket
    - `desktop-app-distributables` R2 bucket
-4. Create a github PAT (Personal Access Token) with the following scopes:
-   - Read access to metadata
-   - Read and Write access to code and pull requests
+4. Create a [GitHub PAT (Personal Access Token)](https://github.com/settings/personal-access-tokens/new) with the following scopes:
    - Scope it to the `self-hosted` repo that has just been forked
+   - Read access to repository metadata
+   - Read and Write access to repository pull requests
 5. Create a "Release webhook" on ToDesktop.
    - Go to https://www.todesktop.com/apps/{YOUR_APP_ID}/settings
    - Scroll to "App webhooks"
