@@ -19,6 +19,8 @@ export async function fetchBuildJSONs(
         const data = (await resp.json()) as BuildJSON;
         results.push({
           ...data,
+          appId,
+          buildId,
           tdManifestUrl: url,
           ebManifestUrl: url
             .replace("td-latest", "latest")
@@ -52,6 +54,8 @@ export interface BuildJSON {
   tdManifestUrl: string;
   ebManifestUrl: string;
   version: string;
+  appId: string;
+  buildId: string;
   createdAt?: string;
   artifacts: {
     [artifactName: string]: {

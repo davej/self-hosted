@@ -1,20 +1,19 @@
 import { Env, NewReleaseWebhook } from "./types";
-import { fetchBuildJSONs } from "./addDistributablesToStaging/fetchBuildJSONs";
+import {
+  BuildJSON,
+  fetchBuildJSONs,
+} from "./addDistributablesToStaging/fetchBuildJSONs";
 import { collectArtifactsFromManifests } from "./addDistributablesToStaging/collectArtifactsFromManifests";
 import { uploadArtifactsToStaging } from "./addDistributablesToStaging/uploadArtifactsToStaging";
 import { createPullRequestForNewBuild } from "./createPR";
 
 /**
- * The main logic that was previously inline in `newReleaseWebhook`.
  * This function:
- *   1) Validates the signature (unless it's empty, then it fails)
- *   2) Parses the body into `NewReleaseWebhook`
- *   3) Fetches manifests
- *   4) Collects artifacts
- *   5) Uploads to staging
- *   6) Creates a PR
- *
- * If all is successful, it returns a string message. Otherwise it throws an error.
+ *   1) Parses the body into `NewReleaseWebhook`
+ *   2) Fetches manifests
+ *   3) Collects artifacts
+ *   4) Uploads to staging
+ *   5) Creates a PR
  */
 export async function processNewReleaseWebhook(
   rawBody: string,
@@ -24,7 +23,7 @@ export async function processNewReleaseWebhook(
     createPullRequest?: boolean;
   } = {}
 ): Promise<string> {
-  // Parse the incoming webhook JSON
+  // 1) Parse the incoming webhook JSON
   let newReleaseWebhookData: NewReleaseWebhook;
   try {
     newReleaseWebhookData = JSON.parse(rawBody);
@@ -36,8 +35,8 @@ export async function processNewReleaseWebhook(
     throw new Error("Missing appId/buildId in webhook");
   }
 
-  // 1) Fetch the build manifests
-  let manifests;
+  // 2) Fetch the build manifests
+  let manifests: BuildJSON[];
   try {
     manifests = await fetchBuildJSONs(
       newReleaseWebhookData.appId,
@@ -47,11 +46,11 @@ export async function processNewReleaseWebhook(
     throw new Error(`Could not fetch build JSON from ToDesktop: ${err}`);
   }
 
-  // 2) Collect all artifacts
+  // 3) Collect all artifacts
   const artifacts = collectArtifactsFromManifests(manifests);
 
   if (!skip.uploadArtifactsToStaging) {
-    // 3) Upload them to staging
+    // 4) Upload them to staging
     try {
       await uploadArtifactsToStaging(
         newReleaseWebhookData.buildId,
@@ -64,14 +63,9 @@ export async function processNewReleaseWebhook(
   }
 
   if (!skip.createPullRequest) {
-    // 4) Create a PR with the build
+    // 5) Create a PR with the build
     try {
-      await createPullRequestForNewBuild(
-        newReleaseWebhookData.buildId,
-        newReleaseWebhookData.appVersion,
-        newReleaseWebhookData.releaseInfo,
-        env
-      );
+      await createPullRequestForNewBuild(newReleaseWebhookData, env);
     } catch (err) {
       throw new Error(`Failed to create PR: ${err}`);
     }

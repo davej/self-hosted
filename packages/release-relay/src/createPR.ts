@@ -1,4 +1,9 @@
-import { BuildEntry, DesktopReleasesJSON, Env } from "./types";
+import {
+  BuildEntry,
+  DesktopReleasesJSON,
+  Env,
+  NewReleaseWebhook,
+} from "./types";
 
 interface DesktopBuildsJSON extends Array<BuildEntry> {}
 
@@ -45,14 +50,14 @@ async function githubRequest<T>(
 }
 
 export async function createPullRequestForNewBuild(
-  buildId: string,
-  version: string,
-  releaseInfo: DesktopReleasesJSON,
+  webhookData: NewReleaseWebhook,
   env: Env
 ): Promise<void> {
   // 1) Get default branch (and HEAD commit SHA)
   const { defaultBranch, commitSha } = await getDefaultBranchAndCommit(env);
   console.log("Default branch:", defaultBranch);
+
+  const { buildId, appVersion, releaseInfo } = webhookData;
 
   // 2) Create a new branch for this release (now captures the actual branch name used)
   const newBranchName = `release-build-${buildId}`;
@@ -70,14 +75,14 @@ export async function createPullRequestForNewBuild(
 
   const updatedBuildContent = updateDesktopBuilds(buildsContent, {
     id: buildId,
-    version,
+    version: appVersion,
     createdAt: new Date().toISOString(),
     isReleased: true,
   });
 
   console.log("Updated builds content:", updatedBuildContent);
 
-  const buildCommitMessage = `Add build ${buildId} (v${version}) to desktop-builds.json`;
+  const buildCommitMessage = `Add build ${buildId} (v${appVersion}) to desktop-builds.json`;
   await commitFileChanges(
     env,
     buildPath,
@@ -104,7 +109,7 @@ export async function createPullRequestForNewBuild(
 
     console.log("Updated releases content:", updatedReleasesContent);
 
-    const releasesCommitMessage = `Release v${version} in desktop-releases.json`;
+    const releasesCommitMessage = `Release v${appVersion} in desktop-releases.json`;
     await commitFileChanges(
       env,
       releasesPath,
@@ -116,8 +121,57 @@ export async function createPullRequestForNewBuild(
   }
 
   // 5) Open a pull request
-  const prTitle = `[release] Add build ${buildId} (v${version})`;
-  const prBody = `This PR adds a new build (ID = ${buildId}, version = ${version}) to desktop-builds.json${
+  const bucket = env.STAGING_R2_BUCKET;
+  const files = await bucket.list({
+    prefix: `${webhookData.appId}`,
+    delimiter: "/",
+  });
+  console.log("Files:", files);
+  const fileList = files.objects.map((file) => ({
+    name: file.key,
+    size: file.size,
+    md5: file.checksums.md5
+      ? btoa(String.fromCharCode(...new Uint8Array(file.checksums.md5)))
+      : undefined,
+    uploaded: file.uploaded,
+  }));
+  console.log("File list:", fileList);
+
+  const {
+    electronVersionUsed,
+    versionControlInfo,
+    buildStartedAt,
+    buildEndedAt,
+  } = webhookData;
+
+  const prTitle = `[release] Add build ${buildId} (v${appVersion})`;
+  const prBody = `| Category | Details |
+|----------|---------|
+| App version | ${appVersion} |
+| Electron version | ${electronVersionUsed} |
+| Commit hash | [${versionControlInfo.commitId}](${
+    versionControlInfo.repositoryRemoteUrl
+  }/commit/${versionControlInfo.commitId}) |
+| Build Started At | ${new Date(buildStartedAt).toLocaleString()} |
+| Build Ended At | ${new Date(buildEndedAt).toLocaleString()} |
+
+### Files
+
+You can find the files in the bucket: \`${fileList[0].name.split("/")[0]}\`
+Under the path: \`${webhookData.appId}/\`
+
+| File | Size | MD5 | Uploaded |
+|------|------|-----|----------|
+${fileList
+  .map(
+    (file) =>
+      `| ${file.name.split("/").pop()} | ${file.size / 1024 / 1024}MB | ${
+        file.md5
+      } | ${file.uploaded.toLocaleString()} |`
+  )
+  .join("\n")}
+  
+This PR adds a new build (ID = ${buildId}, version = ${appVersion}) to desktop-builds.json${
     releaseInfo ? ` and releases it in desktop-releases.json` : ""
   }.
   

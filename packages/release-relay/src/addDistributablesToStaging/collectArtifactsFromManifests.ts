@@ -1,5 +1,9 @@
 import { BuildJSON } from "./fetchBuildJSONs";
 
+function changeURLToToDesktopURL(url: string, appId: string): string {
+  return `https://download.todesktop.com/${appId}/${url.split("/").pop()}`;
+}
+
 export function collectArtifactsFromManifests(manifests: BuildJSON[]): {
   fileName: string;
   url: string;
@@ -37,7 +41,7 @@ export function collectArtifactsFromManifests(manifests: BuildJSON[]): {
         const fileName = decodeURIComponent(info.url.split("/").pop()!);
         allArtifacts.push({
           fileName,
-          url: info.url,
+          url: changeURLToToDesktopURL(info.url, manifest.appId),
           // sha256: info.sha256,
         });
       }
